@@ -13,7 +13,7 @@ def filetranslate(dataset,langcode,filename):
 	if dataset != "ak":
 		column += 2
 	with codecs.open(langcode+'/translation step 2.csv', 'r', 'utf-8') as csvfile:
-		reader_csv = unicode_csv_reader(csvfile)
+		reader_csv = iter(csv.reader(csvfile))
 		header = next(reader_csv, None)
 		if header[0] != "old":
 			return
@@ -21,20 +21,18 @@ def filetranslate(dataset,langcode,filename):
 			f = codecs.open(langcode+"/"+dataset+"/"+filename,'r', 'iso-8859-1')	
 		else:
 			f = codecs.open(langcode+"/hd"+dataset+"/"+filename,'r', 'utf-8')
-		print ""
-		print hd+dataset+"/"+filename
+		print("")
+		print(hd+dataset+"/"+filename)
 		translation = f.read()
 		f.close()
 		#current version of lang is now in translation
 		count = 1
 		for row in reader_csv:
-			#old = len(translation)
 			if row[column]:
 				translation = translation.replace(row[0],"["+str(count)+"]")
-			#print "change: " + str(old - len(translation))
 			count += 1		
 	with codecs.open(langcode+'/translation step 2.csv', 'r', 'utf-8') as csvfile:	
-		reader_csv = unicode_csv_reader(csvfile)
+		reader_csv = iter(csv.reader(csvfile))
 		next(reader_csv, None)
 		count = 1		
 		for row in reader_csv:		

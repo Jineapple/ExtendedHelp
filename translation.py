@@ -1,114 +1,112 @@
 import csv
-import codecs
+import re
+import sys
 
 changed = [False] * 1150
 
-def filetranslate(dataset,filename):	
-	with codecs.open('translation.csv', 'r', 'utf-8') as csvfile:
-		reader_csv = unicode_csv_reader(csvfile)
-		header = next(reader_csv, None)
+def filetranslate(dataset,filename):
+	"""
+		This translations works with two loops. In the first instance, all patterns of english 
+		that should be translated are replaced with temporary text. Based on the ording in translation.csv,
+		long patterns are checked before short ones. This way, already translated portions of the text aren't 
+		changed again if a different pattern happens to match the already translated text by chance.
+		Then in the second loop, the temporary replacements are changed to the actual translation
+	"""
+
+	with open('translation.csv', newline='', encoding='utf-8') as csv_file:
+		reader_csv = csv.reader(csv_file)
+		iter_csv = iter(reader_csv)
+		header = next(iter_csv, None)
 		if header[0] != "en":
 			return	
 		translation = []
 		if(filename[-3:] == "ini"):
-			f = codecs.open("en/"+dataset+"/"+filename,'r', 'iso-8859-1')				
+			f = open("en/"+dataset+"/"+filename,'rt', encoding='iso-8859-1')				
 		else:
-			f = codecs.open("en/hd"+dataset+"/"+filename,'r', 'utf-8')
+			f = open("en/hd"+dataset+"/"+filename,'rt', encoding='utf-8')
 		translation.append(f.read())
 		f.close()
 		#english version is now in translation[0]
-		count = 1
-		for row in reader_csv:
-			temp = translation[0].replace(row[0],"["+str(count)+"]")
-			if temp != translation[0]:
-				changed[count-1] = True
-			translation[0] = temp
+		count = 0
+		required_groups = []
+		for row in iter_csv:
+			#Add possible modifiers like <i> to the pattern. Only the first instance of the modifier is captured
+			row[0] = row[0].replace("+",r"\+").replace("(",r"\(").replace(")",r"\)")
 			parts = row[0].split(' ')
 			first = True
-			fullital = ""
-			fullbold = ""
-			fullboth = ""
+			pattern = ""
 			for part in parts:
-				ital = "<i>"+part+"<i>"
-				bold = "<b>"+part+"<b>"
-				both = "<b><i>"+part+"<i><b>"
+				if first:
+					pattern += "(?:(<b><i>|<i><b>|<b>|<i>)" + part + "(?:<b><i>|<i><b>|<b>|<i>)|" + part + ")"
 				if not first:
-					ital = " "+ital
-					bold = " "+bold
-					both = " "+both
-				fullital = fullital+ital
-				fullbold = fullbold+bold
-				fullboth = fullboth+both
+					pattern += " (?:(?:<b><i>|<i><b>|<b>|<i>)" + part + "(?:<b><i>|<i><b>|<b>|<i>)|" + part + ")"
 				first = False
-			temp = translation[0].replace(fullboth,"["+str(count)+"#]")
+			regex = re.compile(pattern)
+			required_groups.append(regex.groups) #Remember how many capturing groups this has for later
+			repl = "€"+str(count)
+			for i in range(regex.groups):
+				repl += "#\\"+str(i+1)
+			repl += "€"
+			# The A replacement looks e.g. like €27#<i>#2.7€ or €34#€. Split on # (remove the outer €€ first) to get the capturing groups
+			# The first is the id, the second is a potential text modifier or empty string. The rest are other capturing groups
+			temp = regex.sub(repl, translation[0])
 			if temp != translation[0]:
-				changed[count-1] = True
-			translation[0] = temp
-			temp = translation[0].replace(fullital,"["+str(count)+"*]")
-			if temp != translation[0]:
-				changed[count-1] = True
-			translation[0] = temp
-			temp = translation[0].replace(fullbold,"["+str(count)+"~]")
-			if temp != translation[0]:
-				changed[count-1] = True
+				changed[count] = True
 			translation[0] = temp
 			count += 1
-			
-					
 		for i in range(len(header[4:])):
-			translation.append(translation[i])	
-	with codecs.open('translation.csv', 'r', 'utf-8') as csvfile:	
-		reader_csv = unicode_csv_reader(csvfile)
-		next(reader_csv, None)
-		count = 1		
-		for row in reader_csv:
+			translation.append(translation[0])
+	with open('temp.txt', newline='', mode="w", encoding='utf-8') as file:
+		file.write(translation[0])
+		
+			
+	with open('translation.csv', newline='', encoding='utf-8') as csv_file:
+		reader_csv = csv.reader(csv_file)
+		iter_csv = iter(reader_csv)
+		header = next(iter_csv, None)
+		count = 0
+		for row in iter_csv:
+			#construct the pattern based on how many capturing groups were used for this row in the previous loop
+			capture_group = r"#([^#€]*)"
+			pattern = "€"+str(count)
+			for i in range(required_groups[count]):
+				pattern += capture_group
+			pattern += "€"
+			regex = re.compile(pattern)
 			for i in range(len(header[3:])):
-				translation[i] = translation[i].replace("["+str(count)+"]",row[i+3])		
 				parts = row[i+3].split(' ')
-				first = True
-				fullital = ""
-				fullbold = ""
-				fullboth = ""
-				for part in parts:
-					ital = "<i>"+part+"<i>"
-					bold = "<b>"+part+"<b>"
-					both = "<b><i>"+part+"<i><b>"
-					if not first:
-						ital = " "+ital
-						bold = " "+bold
-						both = " "+both
-					fullital = fullital+ital
-					fullbold = fullbold+bold
-					fullboth = fullboth+both
-					first = False
-				translation[i] = translation[i].replace("["+str(count)+"#]", fullboth)
-				translation[i] = translation[i].replace("["+str(count)+"*]", fullital)
-				translation[i] = translation[i].replace("["+str(count)+"~]", fullbold)
+				repl = ""
+				for part in parts: # If there are text modifiers, they're added to the replacement
+					repl += r"\g<1>" + part + r"\g<1> "
+				repl = repl[:-1]
+				translation[i] = regex.sub(repl, translation[i])
 			count += 1				
 		count = 0
 		for lang in header[3:]:
 			if(filename[-3:] == "ini"):	
-				f = codecs.open(lang+"/"+dataset+"/"+filename,'w', 'iso-8859-1')				
+				f = open(lang+"/"+dataset+"/"+filename,'w', encoding='iso-8859-1')				
 			else:
-				f = codecs.open(lang+"/hd"+dataset+"/"+filename,'w', 'utf-8')
+				f = open(lang+"/hd"+dataset+"/"+filename,'w', encoding='utf-8')
 			f.write(translation[count])
 			f.close()				
-			count += 1		
-			
+			count += 1
+	
+
 def unicode_csv_reader(unicode_csv_data, dialect=csv.excel, **kwargs):
 	csv_reader = csv.reader(utf_8_encoder(unicode_csv_data),dialect=dialect, **kwargs)
 	for row in csv_reader:
-		yield [unicode(cell, 'utf-8') for cell in row]
+		yield [unicode(cell, encoding='utf-8') for cell in row]
 
 def utf_8_encoder(unicode_csv_data):
 	for line in unicode_csv_data:
-		yield line.encode('utf-8')
+		yield line.encode(encoding='utf-8')
 
 if __name__ == '__main__':
+	assert sys.version_info >= (3, 0)
 	filetranslate("aoc","key-value-modded-strings-utf8.txt")
 	filetranslate("aoc","language.ini")
 	filetranslate("ak","key-value-modded-strings-utf8.txt")
 	filetranslate("ak","language.ini")
 	for i in range(len(changed)):
 		if not changed[i]:
-			print str(i+2) + " hasn't been used"
+			print (str(i+2) + " hasn't been used")
