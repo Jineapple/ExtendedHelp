@@ -55,10 +55,7 @@ def filetranslate(dataset,filename):
 			translation[0] = temp
 			count += 1
 		for i in range(len(header[4:])):
-			translation.append(translation[0])
-	with open('temp.txt', newline='', mode="w", encoding='utf-8') as file:
-		file.write(translation[0])
-		
+			translation.append(translation[0])		
 			
 	with open('translation.csv', newline='', encoding='utf-8') as csv_file:
 		reader_csv = csv.reader(csv_file)
